@@ -1,7 +1,6 @@
 ---
 # TO DO
 # -----
-# state = absent
 
 - name: nginx role
   tags:
@@ -9,7 +8,7 @@
   block:
 
   # install
-  - when: nginx.state == "present"
+  - when: nginx.apt.state == "present"
     block:
 
     # repo key
@@ -53,3 +52,46 @@
         update_cache: false
         state: present
         name: nginx
+
+  # state == absent
+  - when: nginx.apt.state == "absent"
+    block:
+
+    # remove 
+    - name: Apt remove nginx
+      become: true
+      ansible.builtin.apt:
+        state: absent
+        name: nginx
+
+  # cp sites
+  - when: nginx.config.sites.enabled | length > 0
+    block:
+
+    - name: Copy to /etc/nginx/sites-available {{ nginx.config.sites.enabled }}
+      become: true
+      loop: "{{ nginx.config.sites.enabled }}" # ["sites/ziska/test.local.conf"]
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: /etc/nginx/sites-available # item.split('/')[-1]
+
+    # link
+    - name: Link to /etc/nginx/sites-enabled {{ nginx.config.sites.enabled }}
+      become: true
+      loop: "{{ nginx.config.sites.enabled }}"
+      ansible.builtin.file:
+        src: "/etc/nginx/sites-available/{{ item.split('/')[-1] }}" # sites/ziska/test.local.conf --> test.local.conf
+        dest: /etc/nginx/sites-enabled/{{ item.split('/')[-1] }}
+        state: link
+
+  # rm sites
+  - when: nginx.config.sites.disabled | length > 0
+    block:
+
+    # rm
+    - name: Remove from /etc/nginx/sites-enabled {{ nginx.config.sites.disabled }}
+      become: true
+      loop: "{{ nginx.config.sites.disabled }}"
+      ansible.builtin.file:
+        path: "/etc/nginx/sites-enabled/{{ item }}"
+        state: absent
